@@ -1,0 +1,506 @@
+//collection-js.js/
+
+var ulParentDataId = '';
+var loadSlideSidebar = function(){
+   $('.sidebar-productlist').slick({
+      infinite: true,
+      slidesToShow: 1,
+      slidesToScroll: 1
+    });
+  }
+loadSlideSidebar();
+$(document).on('shopify:section:load',function(evt){
+	loadSlideSidebar();	
+    Shopify.Products.showRecentlyViewed({howManyToShow:2}); 
+});
+//Front End Css
+// Filter CSS
+$(".filter--open").on('click',function(event) {
+    $(".fixed-sidebar").toggleClass("opened"),
+        $(".close-filter").on("click", function() {
+            $(".fixed-sidebar").removeClass("opened")
+        }),
+        event.preventDefault()
+});
+function hideFilterSidebar(){
+	$("#sidebar .filter--open").on('click',function(event) {
+      if($(".fixed-sidebar").hasClass("opened")){
+        $(".fixed-sidebar").removeClass("opened") 
+      }
+      event.preventDefault();
+    }); 
+}
+(function($) {
+
+    // Khoi tao URL dung cho Filter
+    
+    // Khoi tao object cho Collection
+    var apCollectionBase = {
+        initShowMoreEvent: function() {
+            if ($("#loadmore a").length > 0) {
+                $(document).on('click', '#loadmore a', function(event) {
+                    event.preventDefault();
+                    if (!$(this).hasClass("disable")) {
+                        event.preventDefault();
+                        apCollectionBase.getcontentLoadmore();
+                    }
+                })
+            }
+        },
+        CollectionAjaxUrl : {},
+        getcontentLoadmore: function() {
+            // Get Url Next page , based on paginate Shopify
+            var scrollURL = $('.next-page-collection a').last().attr("href");
+          if(scrollURL == undefined){return false}else{
+            $.ajax({
+                type: "GET",
+                url: scrollURL,
+                beforeSend: function() {},
+                success: function(data) {
+
+                    if ($(data).find(".next-page-collection a").length > 0) {
+                      if($(data).find('.next-page-collection a').attr('href') != '#'){
+                        $(".next-page-collection").replaceWith($(data).find(".next-page-collection"));
+                      }else{
+                      	$('#loadmore a').addClass('disable').text('No more Product');
+                      }
+                    }
+
+                    if ($(data).find("#Collection .grid--uniform").length > 0) {
+
+                        var classToAdd = $('.wc-col-switch a.active').data('class');
+                        $(data).find("#Collection .grid--uniform > div").each(function() {
+                            if ($('.wc-col-switch a.active').length > 0) {
+                                apCollectionBase.changeview($(this), classToAdd);
+                            }
+                            $('#Collection .grid--uniform').append($(this));
+                        });
+                      	theme.Cookie.init('.compare-btn','.compare-grid','user_compare','compare');
+						theme.Cookie.init('.wishlist-btn','.wishlist-grid','user_wishlist','wishlist');
+
+                    }
+                    data = null;
+                },
+                error: function(XMLHttpRequest, textStatus) {
+
+                },
+                dataType: "html"
+            })
+          }
+        },
+        autoLoading: function() {
+            if ($('.loadingByScroll').length) {
+                if ($('.autoloading').length == 0){
+                    return false
+                }
+                var x = $('.autoloading').offset().top;
+                var y = window.pageYOffset + window.innerHeight;
+                if (x < y) {
+                    $('.autoloading').removeClass('autoloading');
+                    $('#loadmore a').trigger('click');
+                }
+            }
+        },
+        GetUrl: function() {
+
+            var location_path = location.pathname;
+
+            var location_search = location.search;
+
+            var path_search = location_path.split('/');
+
+            path_search.length > 3 ? path_search = 'constraint=' + path_search.pop().replace(/&/g, "") : path_search = location_search.split('?').pop();
+
+            if (path_search == '') return {};
+
+            else return JSON.parse('{"' + decodeURI(path_search.replace(/&/g, "\",\"").replace(/=/g, "\":\"")) + '"}')
+        },
+        uriToJson: function(value) {
+            return JSON.parse('{"' + decodeURI(value.replace(/&/g, "\",\"").replace(/=/g, "\":\"")) + '"}')
+        },
+        sidebarJS: function() {
+            apCollectionBase.getFilterEven();
+            apCollectionBase.removeFilter();
+
+        },
+        ToolboxJS: function() {
+            apCollectionBase.Sortby();
+            apCollectionBase.sortbyEvent();
+            apCollectionBase.initPaginationEvent();
+        },
+        Sortby: function() {
+            if ($("#SortBy").length > 0) {
+                if (apCollectionBase.CollectionAjaxUrl.sort_by) {
+                    $('#SortBy').each(function() {
+                        $(this).val(apCollectionBase.CollectionAjaxUrl.sort_by);
+                    });
+                }
+            };
+        },
+        sortbyEvent: function() {
+            if ($("#SortBy").length > 0) {
+                $('#SortBy').change(function(event) {
+                    var val = $(this).val();
+                    apCollectionBase.CollectionAjaxUrl.sort_by = val;
+                    apCollectionBase.ajaxClick(apCollectionBase.getAjaxLink(apCollectionBase.CollectionAjaxUrl));
+
+                });
+            }
+        },
+        getFilterEven: function() {
+            if ($(".filtres-js").length > 0) {
+                $('.filtres-js:not(.clear-filters) a').unbind().click(function(event) {
+                  	ulParentDataId = $(this).parent().parent().data('id');
+					$(this).toggleClass('active');
+                    event.preventDefault();
+					$(this).attr('href').split('&').pop();
+                    delete apCollectionBase.CollectionAjaxUrl.page;
+
+                    var tag = $(this).attr('href').split('/').pop().split('?').shift();
+
+                    var constraint = apCollectionBase.CollectionAjaxUrl.constraint;
+
+                    apCollectionBase.CollectionAjaxUrl.constraint = constraint ? constraint + '+' + tag : tag;
+
+                    apCollectionBase.ajaxClick(apCollectionBase.getAjaxLink(apCollectionBase.CollectionAjaxUrl));
+                });
+
+            };
+        },
+        removeFilter: function() {
+            if ($(".filtres-remove-js").length > 0) {
+                $('.filtres-remove-js a').unbind().click(function(event) {
+                  	ulParentDataId = "";
+                    event.preventDefault();
+                    delete apCollectionBase.CollectionAjaxUrl.page;
+                    var $_this = $(this);
+                    if ($_this.hasClass('clear_all')) {
+                        delete apCollectionBase.CollectionAjaxUrl.constraint;
+                    } else {
+                        var href = $_this.attr('href').split('&').pop();
+                        var path = location.pathname;
+                        var page = apCollectionBase.getUrlSubcategory('/collections/', path);
+                        var tag = href.split(page).pop().split('/').pop();
+                        tag != '' ? apCollectionBase.CollectionAjaxUrl.constraint = tag : delete apCollectionBase.CollectionAjaxUrl.constraint;
+                    }
+                  apCollectionBase.ajaxClick(apCollectionBase.getAjaxLink(apCollectionBase.CollectionAjaxUrl));
+                  apCollectionBase.createFilterPriceBar();
+                });
+            };
+        },
+        ajaxClick: function(url) {
+            apCollectionBase.ajaxClickHandlerState = true;
+            History.pushState({
+                param: apCollectionBase.CollectionAjaxUrl
+            }, document.title, url);
+            apCollectionBase.getCollectionContent(url);
+        },
+
+      ViewChecker: function(){
+       	var x = $('.wc-col-switch a.active').data('value');
+         switch (x) {
+                    case 2:
+                        apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-6');
+                        break;
+                    case 3:
+                        apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-4');
+                        break;
+                    case 4:
+                        apCollectionBase.changeview($('#Collection .grid__item'), ' col-md-3');
+                        break;
+                    case 5:
+                        apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-5ths');
+                        break;
+                    case 6:
+                      apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-2');
+                      break;
+                    default:
+                        apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-4');
+                }
+      	
+      },
+        getCollectionContent: function(url) {
+            var view = url.match(/view=([^&#]*)/);
+
+            if (!view) {
+                url += String(url.indexOf('?') > -1 ? '&' : '?');
+            } else {
+                view = view[0];
+                url = url.replace(view, view + 'ajax');
+            }
+
+            jQuery.ajax({
+                type: "get",
+                url: url,
+                beforeSend: function() {
+                    apCollectionBase.showloading();
+                },
+                success: function(data) {
+                   var filterred = $(data).find(".filter_actived");
+                   $(".filter_actived").replaceWith(filterred);
+                   $('#sidebar').replaceWith($(data).find('#sidebar'));
+             
+                    apCollectionBase.hiddenloading();
+                    apCollectionBase.pageData(data);
+                    apCollectionBase.initPaginationEvent();
+                    apCollectionBase.sidebarJS();
+                    apCollectionBase.initShowMoreEvent();
+                    apCollectionBase.ViewChecker();
+                  	apCollectionBase.createFilterPriceBar();
+                  	
+                  	theme.Cookie.init('.compare-btn','.compare-grid','user_compare','compare');
+					theme.Cookie.init('.wishlist-btn','.wishlist-grid','user_wishlist','wishlist');
+                  
+                    hideFilterSidebar();
+                },
+                error: function(XMLHttpRequest, textStatus) {
+                    apCollectionBase.hiddenloading();
+                }
+            })
+        },
+        initPaginationEvent: function() {
+            if ($(".pagination").length > 0) {
+                $(".pagination a").unbind().click(function(event) {
+                    event.preventDefault();
+                    if (!$(this).parent().hasClass("active")) {
+                        var value = $(this).attr("href").match(/page=\d+/g);
+                        if (!value) return false;
+                        apCollectionBase.CollectionAjaxUrl.page = parseInt(value[0].match(/\d+/g));
+                        apCollectionBase.ajaxClick(apCollectionBase.getAjaxLink(apCollectionBase.CollectionAjaxUrl));
+
+                        var current_class = "#Collection";
+                        var stuck = $('.stuck').length ? $('.stuck').height() : 0;
+                        var top = $(current_class).offset().top - stuck;
+                        $(window).scrollTop(top);
+                    }
+                });
+            };
+        },
+        getUrlSubcategory: function(category, url) {
+            var str = url;
+            var n = str.indexOf(category);
+            if (n < 0)
+                return "";
+            str = str.slice(n + category.length, str.length);
+            var m = str.indexOf("/") > -1 ? str.indexOf("/") : str.length;
+            str = str.slice(0, m).toLowerCase();
+            return str.replace(name + "=", "");
+        },
+        getAjaxLink: function(value) {
+            var page = apCollectionBase.getUrlSubcategory('/collections/', location.pathname);
+            var pathname = '/collections/' + page;
+            value = apCollectionBase.getDecodedUrl(value);
+            return value != "" ? pathname + "?" + value : pathname;
+        },
+        pageData: function(data) {
+            var selector = "#Collection";
+
+            var content = $(data).find(selector);
+            $(selector).empty();
+          
+            $(selector).append(content.html());
+            $(selector).each(function(index) {
+                var $_this = $(this);
+                var $_parent_group = $_this.closest('.collapse-block');
+
+                content = $(data).find(selector + ':eq(' + index + ')');
+                $_this.replaceWith(content);
+                content = $(data).find(selector + ':eq(' + index + ')').closest('.collapse-block');
+                content.hasClass('hide') ? $_parent_group.addClass('hide') : $_parent_group.removeClass('hide');
+            });
+            content = $(data).find(".product-pagintion");
+            content.length && $.type(content.html()) === "undefined" ? $(".product-pagintion").empty() : $(".product-pagintion").replaceWith(content);
+
+            content = $(data).find(".number-of-products");
+            $(".number-of-products").replaceWith(content);
+
+            content = $(data).find('.infinitybutton');
+            $('.infinitybutton').replaceWith(content);
+            content = null;
+            data = null;
+        },
+        getDecodedUrl: function(value) {
+            return decodeURIComponent($.param(value));
+        },
+        changeGridView: function() {
+            $('.wc-col-switch a').click(function(event) {
+                $('.wc-col-switch a.active').removeClass('active');
+                $(this).addClass('active');
+                event.preventDefault();
+                var x = $(this).data('value');
+                switch (x) {
+                    case 2:
+                        apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-6');
+                        break;
+                    case 3:
+                        apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-4');
+                        break;
+                    case 4:
+                        apCollectionBase.changeview($('#Collection .grid__item'), ' col-md-3');
+                        break;
+                    case 5:
+                        apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-5ths');
+                        break;
+                    case 6:
+                      apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-2');
+                      break;
+                    default:
+                        apCollectionBase.changeview($('#Collection .grid__item'), 'col-md-4');
+                }
+            })
+        },
+        changeview: function(data, x) {
+            var x = data.removeClass('col-md-6 col-md-5ths col-md-4 col-md-3 col-md-2').addClass(x);
+        },
+        showloading: function() {
+            var loadingselector = $();
+            loadingselector.show();
+        },
+        hiddenloading: function() {
+            var loadingselector = $();
+            loadingselector.hide();
+        },
+        initcreateFilterPriceBar: function() {
+			var moneyFormat = theme.moneyFormat;
+            for (var k in Currency.moneyFormats){
+              if(k == Currency.currentCurrency){
+                moneyFormat = Currency.moneyFormats[k].money_format
+              }
+            }
+          	
+          	var min=0,max=0;
+            var moneyFormat = theme.moneyFormat;
+            $(".grid--view-items .grid__item").each(function() {      
+              if(($(this).data('price'))>max) max = ($(this).data('price'));
+              if(min==0) min =  eval($(this).data('price')); else if(eval($(this).data('price'))<min) min =  eval($(this).data('price'));      
+            });
+
+            var price1 = (Shopify.formatMoney(Currency.convert(min,shopCurrency,Currency.currentCurrency), moneyFormat));
+            var price2 = (Shopify.formatMoney(Currency.convert(max,shopCurrency,Currency.currentCurrency), moneyFormat));
+            $("div.filter-price-bar span.min-price").html(price1);
+            $("div.filter-price-bar span.max-price").html(price2);	  
+            $("div.filter-price-bar span.min-price .money").attr('data-currency-'+shopCurrency,$("div.filter-price-bar span.min-price .money").html());
+            $("div.filter-price-bar span.max-price .money").attr('data-currency-'+shopCurrency,$("div.filter-price-bar span.max-price .money").html());
+        },
+      
+        createFilterPriceBar: function() {
+            var min=0,max=0;
+            var moneyFormat = theme.moneyFormat;
+            for (var k in Currency.moneyFormats){
+              if(k == Currency.currentCurrency){
+                  moneyFormat = Currency.moneyFormats[k].money_format
+              }
+            }
+
+            $(".grid--view-items .grid__item").each(function() {      
+              if(($(this).data('price'))>max) max = ($(this).data('price'));
+              if(min==0) min =  eval($(this).data('price')); else if(eval($(this).data('price'))<min) min =  eval($(this).data('price'));      
+            });
+            $( "#slider-range" ).slider({
+              range: true,
+              min: min,
+              max: max,
+              values: [ min, max ],
+              stop: function( event, ui ) {
+
+              },
+              slide: function( event, ui ) {
+                var price1 = (Shopify.formatMoney(Currency.convert(ui.values[0],shopCurrency,Currency.currentCurrency), moneyFormat));
+                var price2 = (Shopify.formatMoney(Currency.convert(ui.values[1],shopCurrency,Currency.currentCurrency), moneyFormat));
+                $("div.filter-price-bar span.min-price").html(price1);
+                $("div.filter-price-bar span.max-price").html(price2);
+
+                $("div.filter-price-bar span.min-price .money").attr('data-currency-'+shopCurrency,$("div.filter-price-bar span.min-price .money").html());
+                $("div.filter-price-bar span.max-price .money").attr('data-currency-'+shopCurrency,$("div.filter-price-bar span.max-price .money").html());
+
+
+                $(".grid--view-items .grid__item").each(function() {
+                  if(($(this).data('price')) >= ui.values[0] && ($(this).data('price'))<= ui.values[1]){
+                    $(this).fadeIn();
+                  }else{
+                    $(this).fadeOut();
+                  }
+                });
+              }
+            });
+
+              var price1 = (Shopify.formatMoney(Currency.convert(min,shopCurrency,Currency.currentCurrency), moneyFormat));
+              var price2 = (Shopify.formatMoney(Currency.convert(max,shopCurrency,Currency.currentCurrency), moneyFormat));
+              $("div.filter-price-bar span.min-price").html(price1);
+              $("div.filter-price-bar span.max-price").html(price2);	  
+              $("div.filter-price-bar span.min-price .money").attr('data-currency-'+shopCurrency,$("div.filter-price-bar span.min-price .money").html());
+              $("div.filter-price-bar span.max-price .money").attr('data-currency-'+shopCurrency,$("div.filter-price-bar span.max-price .money").html());
+              $(".grid--view-items .grid__item").each(function() {
+                $(this).fadeIn();
+              });
+          },
+      	changeCurrentcies: function() {
+            Currency.format = "money_format";
+            var r = Currency.cookie.read();
+            $("span.money span.money").each(function() {
+                $(this).parent("span.money").removeClass("money")
+            }), $("span.money").each(function() {
+                $(this).attr("data-currency-" + shopCurrency, $(this).html());
+            });
+            var e = $(".currencies a"),
+                n = $(".pre-currencies");
+
+            if (null == r || r == shopCurrency) Currency.currentCurrency = shopCurrency;
+            else {
+                Currency.currentCurrency = r, Currency.convertAll(shopCurrency, r), e.removeClass("selected"), $(".currencies a[data-currency=" + r + "]").addClass("selected");
+                var c = $(".currencies a[data-currency=" + r + "]").html();
+                n.html(c), u(Currency.currentCurrency, shopCurrency)
+                apCollectionBase.createFilterPriceBar();
+            }  
+            e.click(function() {
+                e.removeClass("selected"), $(this).addClass("selected");
+                var r = $(this).attr("data-currency"),
+                    c = $(this).html();
+                n.html(c), Currency.convertAll(Currency.currentCurrency, r), u(Currency.currentCurrency, shopCurrency);
+                $(".pre-currencies").attr("data-currency",r);
+                apCollectionBase.createFilterPriceBar();
+            });
+            window.selectCallback;
+
+            function u(r, e) {
+                $(".selected-currency").text(Currency.currentCurrency), r != e ? ($(".multi-currency-warning").text("*"), $(".multi-currency-warning-bottom").show()) : ($(".multi-currency-warning").text(""), $(".multi-currency-warning-bottom").hide())
+            }
+            u(Currency.currentCurrency, shopCurrency) 
+        },
+      	
+        
+    }
+    $(document).ready(function() {
+        apCollectionBase.GetUrl();
+        apCollectionBase.sidebarJS();
+        apCollectionBase.ToolboxJS();
+        apCollectionBase.initShowMoreEvent();
+        apCollectionBase.changeGridView();
+      	apCollectionBase.createFilterPriceBar();
+      	apCollectionBase.changeCurrentcies();
+      	apCollectionBase.initcreateFilterPriceBar();
+      
+        if ($('.autoloading').length) {
+            $(window).scroll(function() {
+                apCollectionBase.autoLoading();
+            });
+        }
+    });
+      History.Adapter.bind(window, 'statechange', function() {
+        if ($("#Collection").length > 0 || $(".filters-toolbar").length > 0) {
+            if (!apCollectionBase.ajaxClickHandlerState) {
+                var n = location.search == "" ? "" : "?" + location.search;
+                var url = location.pathname + n;
+                apCollectionBase.getCollectionContent(url);
+            }
+            apCollectionBase.ajaxClickHandlerState = false;
+        }
+    });
+})(jQuery)
+/*Shopify Recently View*/
+jQuery.cookie=function(e,i,o){if("undefined"==typeof i){var n=null;if(document.cookie&&""!=document.cookie)for(var r=document.cookie.split(";"),t=0;t<r.length;t++){var p=jQuery.trim(r[t]);if(p.substring(0,e.length+1)==e+"="){n=decodeURIComponent(p.substring(e.length+1));break}}return n}o=o||{},null===i&&(i="",o.expires=-1);var u="";if(o.expires&&("number"==typeof o.expires||o.expires.toUTCString)){var s;"number"==typeof o.expires?(s=new Date,s.setTime(s.getTime()+24*o.expires*60*60*1e3)):s=o.expires,u="; expires="+s.toUTCString()}var a=o.path?"; path="+o.path:"",c=o.domain?"; domain="+o.domain:"",m=o.secure?"; secure":"";document.cookie=[e,"=",encodeURIComponent(i),u,a,c,m].join("")};
+Shopify.Products=(function(){var a={howManyToShow:4,howManyToStoreInMemory:4,wrapperId:"recently-viewed-products",templateId:"recently-template",onComplete:null};var c=[];var h=null;var d=null;var e=0;var b={configuration:{expires:90,path:"/",domain:window.location.hostname},name:"shopify_recently_viewed",write:function(i){jQuery.cookie(this.name,i.join(" "),this.configuration)},read:function(){var i=[];var j=jQuery.cookie(this.name);if(j!==null){i=j.split(" ")}return i},destroy:function(){jQuery.cookie(this.name,null,this.configuration)},remove:function(k){var j=this.read();var i=jQuery.inArray(k,j);if(i!==-1){j.splice(i,1);this.write(j)}}};var f=function(){h.show();if(a.onComplete){try{a.onComplete()}catch(i){}}};var g=function(){if(c.length&&e<a.howManyToShow){jQuery.ajax({dataType:"json",url:"/products/"+c[0]+".js",cache:false,success:function(i){d.tmpl(i).appendTo(h);c.shift();e++;g()},error:function(){b.remove(c[0]);c.shift();g()}})}else{f()}};return{resizeImage:function(m,j){if(j==null){return m}if(j=="master"){return m.replace(/http(s)?:/,"")}var i=m.match(/\.(jpg|jpeg|gif|png|bmp|bitmap|tiff|tif)(\?v=\d+)?/i);if(i!=null){var k=m.split(i[0]);var l=i[0];return(k[0]+"_"+j+l).replace(/http(s)?:/,"")}else{return null}},showRecentlyViewed:function(i){var i=i||{};jQuery.extend(a,i);c=b.read();d=jQuery("#"+a.templateId);h=jQuery("#"+a.wrapperId);a.howManyToShow=Math.min(c.length,a.howManyToShow);if(a.howManyToShow&&d.length&&h.length){g()}},getConfig:function(){return a},clearList:function(){b.destroy()},recordRecentlyViewed:function(l){var l=l||{};jQuery.extend(a,l);var j=b.read();if(window.location.pathname.indexOf("/products/")!==-1){var k=window.location.pathname.match(/\/products\/([a-z0-9\-]+)/)[1];var i=jQuery.inArray(k,j);if(i===-1){j.unshift(k);j=j.splice(0,a.howManyToStoreInMemory)}else{j.splice(i,1);j.unshift(k)}b.write(j)}}}})();
+Shopify.Products.showRecentlyViewed({howManyToShow:4});   
+if($('body').hasClass('template-product')){
+  Shopify.Products.recordRecentlyViewed();
+}
